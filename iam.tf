@@ -1,6 +1,6 @@
 resource "aws_iam_role" "lambda_role" {
   name = "audio_notes_lambda_role"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -13,7 +13,7 @@ resource "aws_iam_role" "lambda_role" {
       }
     ]
   })
-  
+
 }
 
 resource "aws_iam_role_policy_attachment" "lambda_role_policy_attachment" {
@@ -22,7 +22,7 @@ resource "aws_iam_role_policy_attachment" "lambda_role_policy_attachment" {
 }
 
 resource "aws_iam_policy" "lambda_s3_policy" {
-  name = "lambda_s3_policy"
+  name        = "lambda_s3_policy"
   description = "allows lambda function create buckets and save images to them"
 
   policy = jsonencode({
@@ -45,6 +45,6 @@ resource "aws_iam_policy" "lambda_s3_policy" {
 }
 
 resource "aws_iam_role_policy_attachment" "lambda_s3_policy_attachment" {
-  role       = aws_iam_role.lambda_exec_role.name
+  role       = aws_iam_role.lambda_role.name
   policy_arn = aws_iam_policy.lambda_s3_policy.arn
 }
