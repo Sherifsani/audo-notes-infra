@@ -27,6 +27,22 @@ def lambda_handler(event, context):
         body = event["body"]
         is_base64 = event.get("isBase64Encoded", False)
 
+        # Function to try base64 decoding
+        def try_base64_decode(data_str):
+            try:
+                # Remove any whitespace and validate base64
+                cleaned_data = data_str.strip()
+                decoded = base64.b64decode(cleaned_data, validate=True)
+                # Check if the decoded data looks like image binary data
+                if (decoded.startswith(b'\xff\xd8\xff') or  # JPEG
+                    decoded.startswith(b'\x89PNG\r\n\x1a\n') or  # PNG
+                    decoded.startswith(b'GIF8') or  # GIF
+                    decoded.startswith(b'RIFF')):  # WEBP
+                    return decoded
+                return None
+            except Exception:
+                return None
+
         if is_base64:
             image_bytes = base64.b64decode(body)
         else:
@@ -41,13 +57,26 @@ def lambda_handler(event, context):
                         if actual_is_base64:
                             image_bytes = base64.b64decode(actual_body)
                         else:
-                            image_bytes = actual_body.encode("utf-8")
+                            # Try base64 decoding even if not marked as base64
+                            decoded = try_base64_decode(actual_body)
+                            if decoded:
+                                image_bytes = decoded
+                            else:
+                                image_bytes = actual_body.encode("utf-8")
                     else:
-                        # Direct string content
-                        image_bytes = body.encode("utf-8")
+                        # Try base64 decoding first, fallback to string encoding
+                        decoded = try_base64_decode(body)
+                        if decoded:
+                            image_bytes = decoded
+                        else:
+                            image_bytes = body.encode("utf-8")
                 except json.JSONDecodeError:
-                    # Direct string content (not JSON)
-                    image_bytes = body.encode("utf-8")
+                    # Try base64 decoding first, fallback to string encoding
+                    decoded = try_base64_decode(body)
+                    if decoded:
+                        image_bytes = decoded
+                    else:
+                        image_bytes = body.encode("utf-8")
             else:
                 # Direct binary data
                 image_bytes = body 
@@ -56,18 +85,25 @@ def lambda_handler(event, context):
         file_ext = "bin"  # default
         content_type = "application/octet-stream"  # default
         
-        if image_bytes.startswith(b'\xff\xd8\xff'):
-            file_ext = "jpg"
-            content_type = "image/jpeg"
-        elif image_bytes.startswith(b'\x89PNG\r\n\x1a\n'):
-            file_ext = "png"
-            content_type = "image/png"
-        elif image_bytes.startswith(b'GIF8'):
-            file_ext = "gif"
-            content_type = "image/gif"
-        elif image_bytes.startswith(b'RIFF') and b'WEBP' in image_bytes[:12]:
-            file_ext = "webp"
-            content_type = "image/webp"
+        # More comprehensive file type detection
+        if len(image_bytes) >= 10:  # Ensure we have enough bytes to check
+            if image_bytes.startswith(b'\xff\xd8\xff'):
+                file_ext = "jpg"
+                content_type = "image/jpeg"
+            elif image_bytes.startswith(b'\x89PNG\r\n\x1a\n'):
+                file_ext = "png"
+                content_type = "image/png"
+            elif image_bytes.startswith(b'GIF87a') or image_bytes.startswith(b'GIF89a'):
+                file_ext = "gif"
+                content_type = "image/gif"
+            elif image_bytes.startswith(b'RIFF') and len(image_bytes) >= 12 and b'WEBP' in image_bytes[:12]:
+                file_ext = "webp"
+                content_type = "image/webp"
+            elif image_bytes.startswith(b'BM'):  # Bitmap
+                file_ext = "bmp"
+                content_type = "image/bmp"
+        
+        logger.info(f"Detected file type: {file_ext}, content type: {content_type}, data size: {len(image_bytes)} bytes")
         
         filename = f"{uuid.uuid4()}.{file_ext}"
 
