@@ -52,13 +52,30 @@ def lambda_handler(event, context):
                 # Direct binary data
                 image_bytes = body 
 
-        filename = f"{uuid.uuid4()}.jpg"
+        # Detect file type from the first few bytes
+        file_ext = "bin"  # default
+        content_type = "application/octet-stream"  # default
+        
+        if image_bytes.startswith(b'\xff\xd8\xff'):
+            file_ext = "jpg"
+            content_type = "image/jpeg"
+        elif image_bytes.startswith(b'\x89PNG\r\n\x1a\n'):
+            file_ext = "png"
+            content_type = "image/png"
+        elif image_bytes.startswith(b'GIF8'):
+            file_ext = "gif"
+            content_type = "image/gif"
+        elif image_bytes.startswith(b'RIFF') and b'WEBP' in image_bytes[:12]:
+            file_ext = "webp"
+            content_type = "image/webp"
+        
+        filename = f"{uuid.uuid4()}.{file_ext}"
 
         s3.put_object(
             Bucket=bucket_name,
             Key=filename,
             Body=image_bytes,
-            ContentType='image/jpeg'
+            ContentType=content_type
         )
 
         return {
