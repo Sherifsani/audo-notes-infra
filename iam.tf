@@ -34,8 +34,7 @@ resource "aws_iam_policy" "lambda_s3_policy" {
           "s3:*",
         ]
         Resource = [
-          "arn:aws:s3:::your-bucket-name",
-          "arn:aws:s3:::your-bucket-name/*"
+          "arn:aws:s3:::*"
         ]
       }
     ]
