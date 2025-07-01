@@ -11,4 +11,5 @@ resource "aws_lambda_function" "save_images" {
   runtime          = "python3.8"
   filename         = data.archive_file.lambda_zip.output_path
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
+  timeout          = 10
 }
