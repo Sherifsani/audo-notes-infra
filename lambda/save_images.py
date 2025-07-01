@@ -13,7 +13,7 @@ def lambda_handler(event, context):
     logger.info(f"Received event: {json.dumps(event)}")
     s3 = boto3.client('s3')
     try:
-        bucket_name = f'upload-bucket-{datetime.datetime.now().strftime("%Y-%m-%d")}'
+        bucket_name = f'upload-bucket-{datetime.datetime.now().strftime("%Y-%m-%d-%H-%M")}'
         logger.info(f"Target bucket: {bucket_name}")
 
         existing_buckets = s3.list_buckets()
@@ -64,7 +64,7 @@ def lambda_handler(event, context):
         return {
             'statusCode': 200,
             'body': json.dumps({
-                'message': f"Bucket '{bucket_name}' created (if not exists), image uploaded as '{filename}'",
+                'message': f"Bucket '{bucket_name}' created, image uploaded as '{filename}'",
                 'bucket': bucket_name,
                 'key': filename
             })
