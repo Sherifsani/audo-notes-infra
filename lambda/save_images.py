@@ -3,18 +3,26 @@ import boto3
 import datetime
 import base64
 import uuid
+import logging
+
+# Set up logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 def lambda_handler(event, context):
+    logger.info(f"Received event: {json.dumps(event)}")
     s3 = boto3.client('s3')
     try:
         bucket_name = f'upload-bucket-{datetime.datetime.now().strftime("%Y-%m-%d")}'
+        logger.info(f"Target bucket: {bucket_name}")
 
         existing_buckets = s3.list_buckets()
         if not any(b['Name'] == bucket_name for b in existing_buckets['Buckets']):
-            s3.create_bucket(
-                Bucket=bucket_name,
-                CreateBucketConfiguration={'LocationConstraint': 'us-east-1'}
-            )
+            # For us-east-1, don't specify LocationConstraint
+            s3.create_bucket(Bucket=bucket_name)
+            logger.info(f"Created bucket: {bucket_name}")
+        else:
+            logger.info(f"Bucket already exists: {bucket_name}")
 
         body = event["body"]
         is_base64 = event.get("isBase64Encoded", False)
@@ -63,6 +71,7 @@ def lambda_handler(event, context):
         }
 
     except Exception as e:
+        logger.error(f"Error occurred: {str(e)}", exc_info=True)
         return {
             'statusCode': 500,
             'body': json.dumps({'error': str(e)})
