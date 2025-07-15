@@ -13,3 +13,39 @@ resource "aws_lambda_function" "save_images" {
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
   timeout          = 10
 }
+
+data "archive_file" "extract_images" {
+  type        = "zip"
+  source_file = "${path.module}/lambda/extract_images.py"
+  output_path = "${path.module}/lambda/extract_images.zip"
+}
+
+resource "aws_lambda_function" "extract_images" {
+  function_name    = "extract-Images-Function"
+  role             = aws_iam_role.extract_images_role.arn
+  handler          = "extract_images.lambda_handler"
+  runtime          = "python3.12"
+  filename         = data.archive_file.extract_images.output_path
+  source_code_hash = data.archive_file.extract_images.output_base64sha256
+  timeout          = 10
+}
+
+resource "aws_lambda_permission" "allow_s3_invoke" {
+  statement_id  = "AllowExecutionFromS3"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.extract_images.function_name
+  principal     = "s3.amazonaws.com"
+  source_arn    = "arn:aws:s3:::images-bucket-1234"
+}
+
+resource "aws_s3_bucket_notification" "trigger_extract_function" {
+  bucket = "images-bucket-1234"
+
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.extract_images.arn
+    events              = ["s3:ObjectCreated:*"]
+    filter_suffix       = ".jpg"
+  }
+
+  depends_on = [aws_lambda_permission.allow_s3_invoke]
+}
