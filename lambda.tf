@@ -12,6 +12,12 @@ resource "aws_lambda_function" "save_images" {
   filename         = data.archive_file.lambda_zip.output_path
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
   timeout          = 10
+
+  environment {
+    variables = {
+      IMAGES_BUCKET = var.images-bucket-name
+    }
+  }
 }
 
 data "archive_file" "extract_images" {
@@ -28,6 +34,12 @@ resource "aws_lambda_function" "extract_images" {
   filename         = data.archive_file.extract_images.output_path
   source_code_hash = data.archive_file.extract_images.output_base64sha256
   timeout          = 10
+
+  environment {
+    variables = {
+      AUDIO_BUCKET = var.audio-bucket-name
+    }
+  }
 }
 
 resource "aws_lambda_permission" "allow_s3_invoke" {

@@ -11,7 +11,7 @@ s3 = boto3.client('s3')
 def lambda_handler(event, context):
     try:
         # --- 1. Get Bucket Name from Environment Variable ---
-        bucket_name = "images-bucket-1234"
+        bucket_name = os.environ.get('IMAGES_BUCKET')
         if not bucket_name:
             raise ValueError("BUCKET_NAME environment variable is not set.")
 

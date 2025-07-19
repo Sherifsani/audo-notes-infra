@@ -1,7 +1,7 @@
 resource "aws_api_gateway_rest_api" "audio_notes_api" {
   name        = "audio-notes-api"
   description = "API for audio notes"
-  
+
   # Enable binary media types for image uploads
   binary_media_types = [
     "image/*",

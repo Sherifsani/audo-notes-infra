@@ -1,6 +1,7 @@
 import boto3
 import json
 import urllib.parse as urlparse
+import datetime
 
 textract = boto3.client("textract")
 s3 = boto3.client("s3")
@@ -8,6 +9,7 @@ polly = boto3.client("polly")
 
 def lambda_handler(event, context):
     try:
+        audio_bucket = os.environ.get('AUDIO_BUCKET')
         record = event['Records'][0]
         bucket = record['s3']['bucket']['name']
         key = urlparse.unquote_plus(record['s3']['object']['key'])
@@ -43,10 +45,16 @@ def lambda_handler(event, context):
                 
                 # Save audio to S3
                 s3.put_object(
-                    Bucket=bucket,
+                    Bucket=audio_bucket,  # Replace with your audio bucket name
                     Key=audio_key,
                     Body=polly_response['AudioStream'].read(),
-                    ContentType='audio/mpeg'
+                    ContentType='audio/mpeg',
+                    Metadata={
+                        'source-image': key,
+                        'text-length': str(len(extracted_text)),
+                        'voice-id': 'joanna',
+                        'processing-date': datetime.datetime.now().isoformat()
+                    }
                 )
                 
                 print(f"Audio file saved to {bucket}/{audio_key}")
