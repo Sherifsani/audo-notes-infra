@@ -19,18 +19,18 @@ def lambda_handler(event, context):
                     Bucket = bucket_name,
                     Key = obj['Key']
                 )
-            presigned_url = s3.generate_presigned_url(
-                'get_object',
-                params={'Bucket': bucket_name, 'Key': obj['Key']},
-                ExpiresIn=3600  # URL valid for 1 hour
-            )
-            audio_files.append({
-                'key': obj['key'],
-                'size': obj['Size'],
-                'last_modified': obj['LastModified'].isoformat(),
-                'download_url': presigned_url,
-                'metadata': meta_data.get('Metadata',{})
-            })
+                presigned_url = s3.generate_presigned_url(
+                    'get_object',
+                    Params={'Bucket': bucket_name, 'Key': obj['Key']},
+                    ExpiresIn=3600  # URL valid for 1 hour
+                )
+                audio_files.append({
+                    'key': obj['Key'],
+                    'size': obj['Size'],
+                    'last_modified': obj['LastModified'].isoformat(),
+                    'download_url': presigned_url,
+                    'metadata': meta_data.get('Metadata',{})
+                })
         return{
             'statusCode': 200,
             'body': json.dumps({

@@ -42,21 +42,21 @@ resource "aws_lambda_function" "extract_images" {
   }
 }
 
-data "archive_file" "get_images" {
+data "archive_file" "get_audio" {
   type        = "zip"
-  source_file = "${path.module}/lambda/get_images.py"
-  output_path = "${path.module}/lambda/get_images.zip"
+  source_file = "${path.module}/lambda/get_audio.py"
+  output_path = "${path.module}/lambda/get_audio.zip"
 }
 
 
-resource "aws_lambda_function" "get_images" {
-  function_name = "get-Images-Function"
-  role = aws_iam_role.get_images_role.arn
-  handler = "get_images.lambda_handler"
-  runtime = "python3.12"
-  filename = data.archive_file.get_images.output_path
-  source_code_hash = data.archive_file.get_images.output_base64sha256
-  timeout = 10
+resource "aws_lambda_function" "get_audio" {
+  function_name    = "get-Audio-Function"
+  role             = aws_iam_role.get_images_role.arn
+  handler          = "get_audio.lambda_handler"
+  runtime          = "python3.12"
+  filename         = data.archive_file.get_audio.output_path
+  source_code_hash = data.archive_file.get_audio.output_base64sha256
+  timeout          = 10
 
   environment {
     variables = {
