@@ -122,6 +122,20 @@ resource "aws_iam_policy" "lambda_s3_textract" {
       {
         Effect = "Allow",
         Action = [
+          "polly:SynthesizeSpeech"
+        ],
+        Resource = "*"
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "s3:PutObject"
+        ],
+        Resource = "*"
+      },
+      {
+        Effect = "Allow",
+        Action = [
           "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents"
