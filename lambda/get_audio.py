@@ -5,6 +5,18 @@ import boto3
 s3 = boto3.client('s3')
 
 def lambda_handler(event, context):
+    # Handle CORS preflight requests
+    if event.get('httpMethod') == 'OPTIONS':
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Headers': 'Content-Type',
+                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
+            },
+            'body': ''
+        }
+    
     try:
         bucket_name = os.environ.get('AUDIO_BUCKET')
         if not bucket_name:
@@ -12,35 +24,53 @@ def lambda_handler(event, context):
         
         response = s3.list_objects_v2(Bucket=bucket_name)
 
-        audio_files = []
         if 'Contents' in response:
-            for obj in response['Contents']:
-                meta_data = s3.head_object(
-                    Bucket = bucket_name,
-                    Key = obj['Key']
-                )
-                presigned_url = s3.generate_presigned_url(
-                    'get_object',
-                    Params={'Bucket': bucket_name, 'Key': obj['Key']},
-                    ExpiresIn=3600  # URL valid for 1 hour
-                )
-                audio_files.append({
-                    'key': obj['Key'],
-                    'size': obj['Size'],
-                    'last_modified': obj['LastModified'].isoformat(),
-                    'download_url': presigned_url,
-                    'metadata': meta_data.get('Metadata',{})
+            # Get the most recent audio file
+            latest_file = max(response['Contents'], key=lambda x: x['LastModified'])
+            
+            presigned_url = s3.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': bucket_name, 'Key': latest_file['Key']},
+                ExpiresIn=3600  # URL valid for 1 hour
+            )
+            
+            return {
+                'statusCode': 200,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Headers': 'Content-Type',
+                    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
+                },
+                'body': json.dumps({
+                    'audioUrl': presigned_url,
+                    'fileName': latest_file['Key']
                 })
-        return{
-            'statusCode': 200,
-            'body': json.dumps({
-                'message': f'Found {len(audio_files)} audio files',
-                'audio_files': audio_files
-            })
-        }
+            }
+        else:
+            return {
+                'statusCode': 404,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Headers': 'Content-Type',
+                    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
+                },
+                'body': json.dumps({
+                    'error': 'No audio files found',
+                    'message': 'Please wait for processing to complete'
+                })
+            }
 
     except Exception as e:
         return {
             'statusCode': 500,
-            'body': json.dumps({'message': f'Error retrieving environment variable: {str(e)}'})
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
+            'body': json.dumps({
+                'error': 'Failed to retrieve audio files',
+                'message': str(e)
+            })
         }

@@ -46,7 +46,7 @@ def lambda_handler(event, context):
                 
                 # Save audio to S3
                 s3.put_object(
-                    Bucket=audio_bucket,  # Replace with your audio bucket name
+                    Bucket=audio_bucket,
                     Key=audio_key,
                     Body=polly_response['AudioStream'].read(),
                     ContentType='audio/mpeg',
@@ -58,7 +58,7 @@ def lambda_handler(event, context):
                     }
                 )
                 
-                print(f"Audio file saved to {bucket}/{audio_key}")
+                print(f"Audio file saved to {audio_bucket}/{audio_key}")
                 
                 return {
                     "statusCode": 200,

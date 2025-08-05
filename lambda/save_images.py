@@ -3,11 +3,25 @@ import boto3
 import base64
 from datetime import datetime
 import uuid
+import os
+
 
 def lambda_handler(event, context):
+    # Handle CORS preflight requests
+    if event.get('httpMethod') == 'OPTIONS':
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Headers': 'Content-Type',
+                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
+            },
+            'body': ''
+        }
+    
     try:
         s3_client = boto3.client('s3')
-        bucket_name = 'your-bucket-name'
+        bucket_name = os.environ.get('IMAGES_BUCKET')
 
         # Handle different input formats
         image_data = None
@@ -37,6 +51,10 @@ def lambda_handler(event, context):
         if not image_data:
             return {
                 'statusCode': 400,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
                 'body': json.dumps({'error': 'No image data found'})
             }
 
@@ -59,10 +77,13 @@ def lambda_handler(event, context):
             'statusCode': 200,
             'headers': {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Headers': 'Content-Type',
+                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
             },
             'body': json.dumps({
                 'success': True,
+                'message': 'Image uploaded successfully',
                 'filename': filename,
                 'size': len(image_data),
                 'etag': response['ETag']
@@ -73,6 +94,10 @@ def lambda_handler(event, context):
         print(f"Error uploading image: {str(e)}")
         return {
             'statusCode': 500,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
             'body': json.dumps({
                 'error': 'Upload failed',
                 'message': str(e)

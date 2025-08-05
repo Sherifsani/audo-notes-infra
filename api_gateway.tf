@@ -121,6 +121,34 @@ resource "aws_api_gateway_method_response" "get_response" {
   }
 }
 
+# Integration responses for POST
+resource "aws_api_gateway_integration_response" "post_integration_response" {
+  rest_api_id = aws_api_gateway_rest_api.audio_notes_api.id
+  resource_id = aws_api_gateway_resource.api_resource.id
+  http_method = aws_api_gateway_method.post_method.http_method
+  status_code = aws_api_gateway_method_response.post_response.status_code
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin" = "'*'"
+  }
+
+  depends_on = [aws_api_gateway_integration.lambda]
+}
+
+# Integration responses for GET
+resource "aws_api_gateway_integration_response" "get_integration_response" {
+  rest_api_id = aws_api_gateway_rest_api.audio_notes_api.id
+  resource_id = aws_api_gateway_resource.api_resource.id
+  http_method = aws_api_gateway_method.get_method.http_method
+  status_code = aws_api_gateway_method_response.get_response.status_code
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin" = "'*'"
+  }
+
+  depends_on = [aws_api_gateway_integration.lambda_get]
+}
+
 resource "aws_lambda_permission" "apigw" {
   statement_id  = "AllowExecutionFromAPIGateway"
   action        = "lambda:InvokeFunction"
@@ -142,7 +170,10 @@ resource "aws_api_gateway_deployment" "deployment" {
   depends_on = [
     aws_api_gateway_integration.lambda,
     aws_api_gateway_integration.lambda_get,
-    aws_api_gateway_integration.options_integration
+    aws_api_gateway_integration.options_integration,
+    aws_api_gateway_integration_response.post_integration_response,
+    aws_api_gateway_integration_response.get_integration_response,
+    aws_api_gateway_integration_response.options_integration_response
   ]
 
   rest_api_id = aws_api_gateway_rest_api.audio_notes_api.id
@@ -155,6 +186,8 @@ resource "aws_api_gateway_deployment" "deployment" {
       aws_api_gateway_method.get_method.id,
       aws_api_gateway_integration.lambda.id,
       aws_api_gateway_integration.lambda_get.id,
+      aws_api_gateway_integration_response.post_integration_response.id,
+      aws_api_gateway_integration_response.get_integration_response.id,
     ]))
   }
 

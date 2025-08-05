@@ -69,16 +69,34 @@ resource "aws_lambda_permission" "allow_s3_invoke" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.extract_images.function_name
   principal     = "s3.amazonaws.com"
-  source_arn    = "arn:aws:s3:::images-bucket-1234"
+  source_arn    = aws_s3_bucket.images_bucket.arn
 }
 
 resource "aws_s3_bucket_notification" "trigger_extract_function" {
-  bucket = "images-bucket-1234"
+  bucket = aws_s3_bucket.images_bucket.id
 
   lambda_function {
     lambda_function_arn = aws_lambda_function.extract_images.arn
     events              = ["s3:ObjectCreated:*"]
     filter_suffix       = ".jpg"
+  }
+
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.extract_images.arn
+    events              = ["s3:ObjectCreated:*"]
+    filter_suffix       = ".jpeg"
+  }
+
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.extract_images.arn
+    events              = ["s3:ObjectCreated:*"]
+    filter_suffix       = ".png"
+  }
+
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.extract_images.arn
+    events              = ["s3:ObjectCreated:*"]
+    filter_suffix       = ".webp"
   }
 
   depends_on = [aws_lambda_permission.allow_s3_invoke]
