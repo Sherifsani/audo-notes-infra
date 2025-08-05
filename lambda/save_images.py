@@ -1,95 +1,80 @@
 import json
 import boto3
 import base64
-import os
+from datetime import datetime
 import uuid
-import mimetypes
-
-# Initialize the S3 client
-s3 = boto3.client('s3')
 
 def lambda_handler(event, context):
     try:
-        # --- 1. Get Bucket Name from Environment Variable ---
-        bucket_name = os.environ.get('IMAGES_BUCKET')
-        if not bucket_name:
-            raise ValueError("BUCKET_NAME environment variable is not set.")
+        s3_client = boto3.client('s3')
+        bucket_name = 'your-bucket-name'
 
-        # --- 2. Parse Request Body ---
-        # For a standard JSON API, the body will be a JSON string.
-        # We load it directly.
-        body = event.get('body', '{}')
-        payload = json.loads(body)
+        # Handle different input formats
+        image_data = None
+        content_type = 'image/jpeg'
 
-        # --- 3. Extract Image Data and File Name ---
-        image_base64 = payload.get('image')
-        file_name = payload.get('fileName')
+        # Method 1: Direct binary upload (multipart/form-data)
+        if event.get('isBase64Encoded', False):
+            image_data = base64.b64decode(event['body'])
+            content_type = event.get('headers', {}).get('content-type', 'image/jpeg')
 
-        if not image_base64 or not file_name:
+        # Method 2: JSON payload with base64 image
+        elif event.get('body'):
+            try:
+                body = json.loads(event['body'])
+                if 'image' in body:
+                    # Remove data URL prefix if present (data:image/jpeg;base64,)
+                    image_base64 = body['image']
+                    if image_base64.startswith('data:'):
+                        image_base64 = image_base64.split(',')[1]
+
+                    image_data = base64.b64decode(image_base64)
+                    content_type = body.get('contentType', 'image/jpeg')
+            except json.JSONDecodeError:
+                # Assume the body is raw base64
+                image_data = base64.b64decode(event['body'])
+
+        if not image_data:
             return {
                 'statusCode': 400,
-                'body': json.dumps({'message': 'Missing "image" or "fileName" in request body.'})
+                'body': json.dumps({'error': 'No image data found'})
             }
 
-        # Decode the base64 string to get the binary image data
-        image_data = base64.b64decode(image_base64)
+        # Generate filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        unique_id = str(uuid.uuid4())[:8]
+        extension = content_type.split('/')[-1] if '/' in content_type else 'jpg'
+        filename = f"uploads/{timestamp}_{unique_id}.{extension}"
 
-        # --- 4. Generate a Unique Key for S3 ---
-        unique_id = uuid.uuid4()
-        s3_key = f"uploads/{unique_id}-{file_name}"
-
-        # --- 5. Determine Content Type ---
-        # Guess the MIME type of the file based on its extension
-        content_type = mimetypes.guess_type(file_name)[0]
-        if not content_type:
-            content_type = 'application/octet-stream' # Default if type cannot be determined
-
-        # --- 6. Upload to S3 ---
-        # The PutObject operation uploads the data to the specified bucket.
-        # We now include the ContentType.
-        s3.put_object(
+        # Upload to S3
+        response = s3_client.put_object(
             Bucket=bucket_name,
-            Key=s3_key,
+            Key=filename,
             Body=image_data,
-            ContentType=content_type
+            ContentType=content_type,
+            ServerSideEncryption='AES256'  # Optional: encrypt at rest
         )
 
-        # --- 7. Generate a Presigned URL (Optional but useful) ---
-        presigned_url = s3.generate_presigned_url(
-            'get_object',
-            Params={'Bucket': bucket_name, 'Key': s3_key},
-            ExpiresIn=3600
-        )
-
-        # --- 8. Return Success Response ---
         return {
             'statusCode': 200,
             'headers': {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*' # Add CORS headers if needed
+                'Access-Control-Allow-Origin': '*'
             },
             'body': json.dumps({
-                'message': 'Image uploaded successfully!',
-                's3_key': s3_key,
-                'presigned_url': presigned_url,
-                'contentType': content_type
+                'success': True,
+                'filename': filename,
+                'size': len(image_data),
+                'etag': response['ETag']
             })
         }
 
-    except json.JSONDecodeError:
-        return {
-            'statusCode': 400,
-            'body': json.dumps({'message': 'Invalid JSON in request body.'})
-        }
-    except (TypeError, base64.binascii.Error) as e:
-         return {
-            'statusCode': 400,
-            'body': json.dumps({'message': f'Invalid base64 encoding for image: {str(e)}'})
-        }
     except Exception as e:
-        # Generic error handler for unexpected issues
-        print(f"Error: {e}")
+        print(f"Error uploading image: {str(e)}")
         return {
             'statusCode': 500,
-            'body': json.dumps({'message': f'Internal server error: {str(e)}'})
+            'body': json.dumps({
+                'error': 'Upload failed',
+                'message': str(e)
+            })
         }
