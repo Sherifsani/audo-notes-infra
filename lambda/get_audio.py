@@ -5,18 +5,6 @@ import boto3
 s3 = boto3.client('s3')
 
 def lambda_handler(event, context):
-    # Handle CORS preflight requests
-    if event.get('httpMethod') == 'OPTIONS':
-        return {
-            'statusCode': 200,
-            'headers': {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Headers': 'Content-Type',
-                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
-            },
-            'body': ''
-        }
-    
     try:
         bucket_name = os.environ.get('AUDIO_BUCKET')
         if not bucket_name:

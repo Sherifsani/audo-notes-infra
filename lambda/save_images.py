@@ -1,105 +1,114 @@
-import json
-import boto3
-import base64
-from datetime import datetime
-import uuid
 import os
+import boto3
+import json
+import logging
+import uuid
+import re
 
+s3_client = boto3.client('s3')
+BUCKET_NAME = os.environ['IMAGES_BUCKET']
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 def lambda_handler(event, context):
-    # Handle CORS preflight requests
-    if event.get('httpMethod') == 'OPTIONS':
-        return {
-            'statusCode': 200,
-            'headers': {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Headers': 'Content-Type',
-                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
-            },
-            'body': ''
-        }
-    
+    logger.info(f"Received event: {json.dumps(event)}")
+
     try:
-        s3_client = boto3.client('s3')
-        bucket_name = os.environ.get('IMAGES_BUCKET')
-
-        # Handle different input formats
-        image_data = None
-        content_type = 'image/jpeg'
-
-        # Method 1: Direct binary upload (multipart/form-data)
-        if event.get('isBase64Encoded', False):
-            image_data = base64.b64decode(event['body'])
-            content_type = event.get('headers', {}).get('content-type', 'image/jpeg')
-
-        # Method 2: JSON payload with base64 image
-        elif event.get('body'):
-            try:
-                body = json.loads(event['body'])
-                if 'image' in body:
-                    # Remove data URL prefix if present (data:image/jpeg;base64,)
-                    image_base64 = body['image']
-                    if image_base64.startswith('data:'):
-                        image_base64 = image_base64.split(',')[1]
-
-                    image_data = base64.b64decode(image_base64)
-                    content_type = body.get('contentType', 'image/jpeg')
-            except json.JSONDecodeError:
-                # Assume the body is raw base64
-                image_data = base64.b64decode(event['body'])
-
-        if not image_data:
+        # Handle preflight OPTIONS request
+        if event.get("httpMethod") == "OPTIONS":
             return {
-                'statusCode': 400,
-                'headers': {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
+                "statusCode": 200,
+                "headers": {
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type,Authorization"
                 },
-                'body': json.dumps({'error': 'No image data found'})
+                "body": ""
             }
 
-        # Generate filename
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        unique_id = str(uuid.uuid4())[:8]
-        extension = content_type.split('/')[-1] if '/' in content_type else 'jpg'
-        filename = f"uploads/{timestamp}_{unique_id}.{extension}"
+        # Handle POST request with JSON body
+        if event.get("httpMethod") == "POST":
+            # Parse the request body
+            body = json.loads(event.get("body", "{}"))
+            file_name = body.get("fileName")
+            file_type = body.get("fileType")
+        else:
+            return {
+                "statusCode": 405,
+                "headers": {
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type,Authorization"
+                },
+                "body": json.dumps({"message": "Method not allowed. Use POST."})
+            }
 
-        # Upload to S3
-        response = s3_client.put_object(
-            Bucket=bucket_name,
-            Key=filename,
-            Body=image_data,
-            ContentType=content_type,
-            ServerSideEncryption='AES256'  # Optional: encrypt at rest
+        if not file_name or not file_type:
+            return {
+                "statusCode": 400,
+                "headers": {
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type,Authorization"
+                },
+                "body": json.dumps({"message": "Missing fileName or fileType"})
+            }
+
+        # Validate file type is an image
+        allowed_types = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]
+        if file_type not in allowed_types:
+            return {
+                "statusCode": 400,
+                "headers": {
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type,Authorization"
+                },
+                "body": json.dumps({"message": "Invalid file type. Only images are allowed."})
+            }
+
+        # Sanitize filename and add UUID to prevent conflicts
+        # Remove any path separators and dangerous characters
+        safe_filename = re.sub(r'[^\w\-_\.]', '', file_name)
+        if not safe_filename:
+            safe_filename = "image"
+        
+        # Add UUID prefix to prevent filename conflicts
+        unique_filename = f"{uuid.uuid4()}_{safe_filename}"
+
+        # Create pre-signed URL
+        presigned_url = s3_client.generate_presigned_url(
+            'put_object',
+            Params={
+                'Bucket': BUCKET_NAME,
+                'Key': unique_filename,
+                'ContentType': file_type
+            },
+            ExpiresIn=300  # 5 minutes
         )
 
         return {
-            'statusCode': 200,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Headers': 'Content-Type',
-                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
+            "statusCode": 200,
+            "headers": {
+                "Access-Control-Allow-Origin": "*",  # Consider restricting this to your domain
+                "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type,Authorization"
             },
-            'body': json.dumps({
-                'success': True,
-                'message': 'Image uploaded successfully',
-                'filename': filename,
-                'size': len(image_data),
-                'etag': response['ETag']
+            "body": json.dumps({
+                "uploadUrl": presigned_url,
+                "fileName": unique_filename
             })
         }
 
     except Exception as e:
-        print(f"Error uploading image: {str(e)}")
+        logger.error(f"Error generating presigned URL: {str(e)}", exc_info=True)
         return {
-            'statusCode': 500,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
+            "statusCode": 500,
+            "headers": {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type,Authorization"
             },
-            'body': json.dumps({
-                'error': 'Upload failed',
-                'message': str(e)
-            })
+            "body": json.dumps({"message": "Internal server error", "error": str(e)})
         }
