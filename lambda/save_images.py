@@ -15,6 +15,9 @@ def lambda_handler(event, context):
     logger.info(f"Received event: {json.dumps(event)}")
 
     try:
+        # delete all images in the bucket when the request is made
+        for obj in s3_client.list_objects_v2(Bucket=BUCKET_NAME).get("Contents", []):
+            s3_client.delete_object(Bucket=BUCKET_NAME, Key=obj["Key"])
         # Handle preflight OPTIONS request
         if event.get("httpMethod") == "OPTIONS":
             return {

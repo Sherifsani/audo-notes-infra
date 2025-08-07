@@ -11,6 +11,10 @@ polly = boto3.client("polly")
 def lambda_handler(event, context):
     try:
         audio_bucket = os.environ.get('AUDIO_BUCKET')
+        # empty the audio bucket before processing
+        for obj in s3.list_objects_v2(Bucket=audio_bucket).get("Contents", []):
+            s3.delete_object(Bucket=audio_bucket, Key=obj["Key"])
+        
         record = event['Records'][0]
         bucket = record['s3']['bucket']['name']
         key = urlparse.unquote_plus(record['s3']['object']['key'])
